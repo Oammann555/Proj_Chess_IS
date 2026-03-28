@@ -3,11 +3,9 @@ import joblib
 import numpy as np
 import chess
 from tensorflow.keras.models import load_model
-from tensorflow.keras.optimizers import Adam # Import Adam optimizer
 
 # โหลดโมเดล
-ensemble = joblib.load("random_forest_model.pkl")
-# Load nn_model with compile=False to avoid deserialization issues, then recompile
+ensemble = joblib.load("ensemble_model.pkl")  # แก้จาก random_forest_model.pkl
 nn_model = load_model("nn_model.h5", compile=False)
 nn_model.compile(
     optimizer='adam',
@@ -71,8 +69,7 @@ if page == "ML Model":
     - King safety
 
     The model predicts the evaluation score of a chess position.
-    """
-)
+    """)
 
 # ---------------- PAGE 2 ----------------
 elif page == "Neural Network":
@@ -88,8 +85,7 @@ elif page == "Neural Network":
     - Mean Squared Error (MSE)
 
     The neural network learns non-linear relationships in chess positions.
-    """
-)
+    """)
 
 # ---------------- PAGE 3 ----------------
 elif page == "Test ML":
@@ -123,7 +119,7 @@ elif page == "Test NN":
     if st.button("Predict (NN)"):
         try:
             features = extract_features(fen)
-            pred_nn = nn_model.predict(features)[0][0] # Renamed pred to pred_nn to avoid conflict with ensemble
+            pred_nn = nn_model.predict(features)[0][0]
 
             st.success(f"Evaluation Score: {pred_nn:.2f}")
 

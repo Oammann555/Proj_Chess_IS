@@ -2,18 +2,12 @@ import streamlit as st
 import joblib
 import numpy as np
 import chess
-from tensorflow.keras.models import load_model
 
 # โหลดโมเดล
-ensemble = joblib.load("ensemble_model.pkl")  # แก้จาก random_forest_model.pkl
-nn_model = load_model("nn_model.h5", compile=False)
-nn_model.compile(
-    optimizer='adam',
-    loss='mse',
-    metrics=['mae']
-)
+ensemble = joblib.load("ensemble_model.pkl")
+nn_model = joblib.load("nn_model_sklearn.pkl")
 
-# feature function (ต้องเหมือนตอน train!)
+# feature function
 piece_values = {
     chess.PAWN: 1,
     chess.KNIGHT: 3,
@@ -119,7 +113,7 @@ elif page == "Test NN":
     if st.button("Predict (NN)"):
         try:
             features = extract_features(fen)
-            pred_nn = nn_model.predict(features)[0][0]
+            pred_nn = nn_model.predict(features)[0]
 
             st.success(f"Evaluation Score: {pred_nn:.2f}")
 

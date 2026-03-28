@@ -3,4 +3,3 @@ numpy>=1.23,<2
 scikit-learn
 python-chess
 joblib
-tensorflow-cpu==2.13.0

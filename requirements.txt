@@ -1,5 +1,5 @@
 streamlit
-numpy>=1.23,<2
+numpy==2.0.2
 scikit-learn
 python-chess
 joblib

@@ -94,7 +94,48 @@ def make_board_html(init_pos, init_side):
     padding: 8px;
     gap: 10px;
   }}
-  #board {{ width: 400px; }}
+
+  /* ── main layout: tray | board | tray ── */
+  .main-row {{
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: center;
+  }}
+  #board {{ width: 380px; flex-shrink: 0; }}
+
+  /* ── piece tray ── */
+  .tray {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px;
+    width: 52px;
+  }}
+  .tray-label {{
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    color: #64748b;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }}
+  .spare-piece {{
+    width: 40px;
+    height: 40px;
+    cursor: grab;
+    user-select: none;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }}
+  .spare-piece:hover {{ background: #e2e8f0; }}
+  .spare-piece img {{ width: 100%; height: 100%; pointer-events: none; }}
+
+  /* ── controls ── */
   .row {{
     display: flex;
     gap: 8px;
@@ -112,8 +153,9 @@ def make_board_html(init_pos, init_side):
     transition: filter 0.15s;
   }}
   button:hover {{ filter: brightness(1.12); }}
-  .btn-gray  {{ background: #374151; color: #f3f4f6; }}
-  .btn-blue  {{ background: #2563eb; color: #ffffff; }}
+  .btn-gray {{ background: #374151; color: #f3f4f6; }}
+  .btn-blue {{ background: #2563eb; color: #ffffff; }}
+  .btn-red  {{ background: #dc2626; color: #ffffff; }}
   .side-btn {{
     padding: 5px 16px;
     border-radius: 20px;
@@ -124,14 +166,10 @@ def make_board_html(init_pos, init_side):
     font-size: 12px;
     font-weight: 600;
   }}
-  .side-btn.active {{
-    background: #1d4ed8;
-    border-color: #1d4ed8;
-    color: #fff;
-  }}
+  .side-btn.active {{ background: #1d4ed8; border-color: #1d4ed8; color: #fff; }}
   #fen-box {{
     width: 100%;
-    max-width: 440px;
+    max-width: 480px;
     background: #f1f5f9;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
@@ -149,10 +187,8 @@ def make_board_html(init_pos, init_side):
     min-height: 16px;
     text-align: center;
   }}
-  .label {{
-    font-size: 12px;
-    color: #6b7280;
-  }}
+  .label {{ font-size: 12px; color: #6b7280; }}
+  .tray-sep {{ border: none; border-top: 1px solid #e2e8f0; margin: 2px 0; }}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
@@ -160,33 +196,75 @@ def make_board_html(init_pos, init_side):
 </head>
 <body>
 
-<div id="board"></div>
+<div class="main-row">
 
+  <!-- LEFT TRAY: White pieces -->
+  <div class="tray" id="tray-white">
+    <div class="tray-label">White</div>
+    <div class="spare-piece" draggable="true" data-piece="wK"><img src="https://lichess1.org/assets/piece/cburnett/wK.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="wQ"><img src="https://lichess1.org/assets/piece/cburnett/wQ.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="wR"><img src="https://lichess1.org/assets/piece/cburnett/wR.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="wB"><img src="https://lichess1.org/assets/piece/cburnett/wB.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="wN"><img src="https://lichess1.org/assets/piece/cburnett/wN.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="wP"><img src="https://lichess1.org/assets/piece/cburnett/wP.svg"></div>
+  </div>
+
+  <!-- BOARD -->
+  <div id="board"></div>
+
+  <!-- RIGHT TRAY: Black pieces -->
+  <div class="tray" id="tray-black">
+    <div class="tray-label">Black</div>
+    <div class="spare-piece" draggable="true" data-piece="bK"><img src="https://lichess1.org/assets/piece/cburnett/bK.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="bQ"><img src="https://lichess1.org/assets/piece/cburnett/bQ.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="bR"><img src="https://lichess1.org/assets/piece/cburnett/bR.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="bB"><img src="https://lichess1.org/assets/piece/cburnett/bB.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="bN"><img src="https://lichess1.org/assets/piece/cburnett/bN.svg"></div>
+    <div class="spare-piece" draggable="true" data-piece="bP"><img src="https://lichess1.org/assets/piece/cburnett/bP.svg"></div>
+  </div>
+
+</div>
+
+<!-- Side to move -->
 <div class="row">
   <span class="label">Side to move:</span>
   <button class="side-btn {'active' if init_side == 'w' else ''}" id="btn-w" onclick="setSide('w')">White</button>
   <button class="side-btn {'active' if init_side == 'b' else ''}" id="btn-b" onclick="setSide('b')">Black</button>
 </div>
 
+<!-- FEN display -->
 <div id="fen-box">Loading...</div>
 
+<!-- Buttons -->
 <div class="row">
   <button class="btn-gray" onclick="resetBoard()">Reset</button>
   <button class="btn-gray" onclick="board.flip()">Flip</button>
-  <button class="btn-gray" onclick="clearBoard()">Clear</button>
+  <button class="btn-red"  onclick="clearBoard()">Clear</button>
   <button class="btn-blue" onclick="copyFen()">Copy FEN</button>
 </div>
 <div id="copy-msg"></div>
 
 <script>
+  var pieceMap = {{
+    'wK':'https://lichess1.org/assets/piece/cburnett/wK.svg',
+    'wQ':'https://lichess1.org/assets/piece/cburnett/wQ.svg',
+    'wR':'https://lichess1.org/assets/piece/cburnett/wR.svg',
+    'wB':'https://lichess1.org/assets/piece/cburnett/wB.svg',
+    'wN':'https://lichess1.org/assets/piece/cburnett/wN.svg',
+    'wP':'https://lichess1.org/assets/piece/cburnett/wP.svg',
+    'bK':'https://lichess1.org/assets/piece/cburnett/bK.svg',
+    'bQ':'https://lichess1.org/assets/piece/cburnett/bQ.svg',
+    'bR':'https://lichess1.org/assets/piece/cburnett/bR.svg',
+    'bB':'https://lichess1.org/assets/piece/cburnett/bB.svg',
+    'bN':'https://lichess1.org/assets/piece/cburnett/bN.svg',
+    'bP':'https://lichess1.org/assets/piece/cburnett/bP.svg'
+  }};
+
   var side = '{init_side}';
 
-  function getFen() {{
-    return board.fen() + ' ' + side + ' KQkq - 0 1';
-  }}
-  function updateFenBox() {{
-    document.getElementById('fen-box').textContent = getFen();
-  }}
+  function getFen() {{ return board.fen() + ' ' + side + ' KQkq - 0 1'; }}
+  function updateFenBox() {{ document.getElementById('fen-box').textContent = getFen(); }}
+
   function setSide(s) {{
     side = s;
     document.getElementById('btn-w').classList.toggle('active', s === 'w');
@@ -209,29 +287,56 @@ def make_board_html(init_pos, init_side):
     }});
   }}
 
-  var pieceMap = {{
-    'wK':'https://lichess1.org/assets/piece/cburnett/wK.svg',
-    'wQ':'https://lichess1.org/assets/piece/cburnett/wQ.svg',
-    'wR':'https://lichess1.org/assets/piece/cburnett/wR.svg',
-    'wB':'https://lichess1.org/assets/piece/cburnett/wB.svg',
-    'wN':'https://lichess1.org/assets/piece/cburnett/wN.svg',
-    'wP':'https://lichess1.org/assets/piece/cburnett/wP.svg',
-    'bK':'https://lichess1.org/assets/piece/cburnett/bK.svg',
-    'bQ':'https://lichess1.org/assets/piece/cburnett/bQ.svg',
-    'bR':'https://lichess1.org/assets/piece/cburnett/bR.svg',
-    'bB':'https://lichess1.org/assets/piece/cburnett/bB.svg',
-    'bN':'https://lichess1.org/assets/piece/cburnett/bN.svg',
-    'bP':'https://lichess1.org/assets/piece/cburnett/bP.svg'
-  }};
-
+  // ── chessboard.js init ──
   var board = Chessboard('board', {{
     draggable: true,
     position: '{init_pos}',
     onSnapEnd: updateFenBox,
-    pieceTheme: function(piece) {{ return pieceMap[piece]; }}
+    dropOffBoard: 'trash',       // drag piece off board to remove it
+    pieceTheme: function(p) {{ return pieceMap[p]; }}
+  }});
+  updateFenBox();
+
+  // ── Piece tray drag-and-drop onto board ──
+  // We find the square under the drop and set the piece there.
+  var draggedPiece = null;
+
+  document.querySelectorAll('.spare-piece').forEach(function(el) {{
+    el.addEventListener('dragstart', function(e) {{
+      draggedPiece = el.getAttribute('data-piece');
+      e.dataTransfer.effectAllowed = 'copy';
+    }});
   }});
 
-  updateFenBox();
+  // The board element receives the drop
+  document.getElementById('board').addEventListener('dragover', function(e) {{
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }});
+
+  document.getElementById('board').addEventListener('drop', function(e) {{
+    e.preventDefault();
+    if (!draggedPiece) return;
+
+    // Calculate which square was dropped on
+    var boardEl   = document.getElementById('board');
+    var rect      = boardEl.getBoundingClientRect();
+    var squareSize = rect.width / 8;
+    var col = Math.floor((e.clientX - rect.left)  / squareSize); // 0-7
+    var row = Math.floor((e.clientY - rect.top)   / squareSize); // 0-7
+
+    // chessboard.js uses algebraic notation: files a-h, ranks 8-1 (top to bottom)
+    var file   = String.fromCharCode('a'.charCodeAt(0) + col);
+    var rank   = 8 - row;
+    var square = file + rank;
+
+    // Update position
+    var pos = board.position();
+    pos[square] = draggedPiece;
+    board.position(pos, false);
+    updateFenBox();
+    draggedPiece = null;
+  }});
 </script>
 </body>
 </html>"""
@@ -252,7 +357,7 @@ def render_test_page(model, model_name, key_prefix):
 
     # --- Drag-and-drop board ---
     st.write("Drag and drop pieces to set up your position, then click **Copy FEN** and paste it below.")
-    st.components.v1.html(make_board_html(init_pos, init_side), height=555, scrolling=False)
+    st.components.v1.html(make_board_html(init_pos, init_side), height=590, scrolling=False)
 
     st.divider()
 

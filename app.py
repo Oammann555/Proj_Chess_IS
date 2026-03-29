@@ -2,6 +2,7 @@ import streamlit as st
 import joblib
 import numpy as np
 import chess
+import chess.svg
 
 # Load models
 ensemble = joblib.load("ensemble_model.pkl")
@@ -37,16 +38,6 @@ def extract_features(fen):
                   int(board.is_attacked_by(chess.WHITE, black_king))
 
     return np.array([[material, mobility, center, king_safety]])
-
-
-def render_board_svg(fen):
-    """Render chess board as SVG from FEN string."""
-    try:
-        board = chess.Board(fen)
-        svg = chess.svg.board(board, size=400)
-        return svg
-    except Exception:
-        return None
 
 
 # ---------------- UI ----------------
@@ -190,16 +181,13 @@ elif page == "Test ML":
         try:
             features = extract_features(fen)
             pred = ensemble.predict(features)[0]
-
             st.success(f"Evaluation Score: {pred:.2f}")
-
             if pred > 0:
                 st.write("White is better")
             elif pred < 0:
                 st.write("Black is better")
             else:
                 st.write("Equal position")
-
         except Exception as e:
             st.error(f"Invalid FEN or prediction error: {e}")
 
@@ -215,159 +203,273 @@ elif page == "Test NN":
         try:
             features = extract_features(fen)
             pred_nn = nn_model.predict(features)[0]
-
             st.success(f"Evaluation Score: {pred_nn:.2f}")
-
             if pred_nn > 0:
                 st.write("White is better")
             elif pred_nn < 0:
                 st.write("Black is better")
             else:
                 st.write("Equal position")
-
         except Exception as e:
             st.error(f"Invalid FEN or prediction error: {e}")
 
 # ---------------- PAGE 5: Interactive Board ----------------
 elif page == "Interactive Board":
     st.header("Interactive Board Evaluation")
+    st.write(
+        "Drag and drop pieces to set up any position. "
+        "The FEN updates automatically — click **Copy FEN**, "
+        "paste it below, then evaluate with either model."
+    )
 
-    st.write("""
-    Set up a chess position using the controls below, then evaluate it using both models.
-    You can either enter a FEN string directly or use the piece editor to build a position manually.
-    """)
-
-    # --- FEN Input ---
-    st.subheader("Position Setup")
-
-    preset = st.selectbox("Load a preset position", [
-        "Starting position",
-        "Sicilian Defense (after 1.e4 c5)",
-        "Ruy Lopez (after 1.e4 e5 2.Nf3 Nc6 3.Bb5)",
-        "Queen's Gambit (after 1.d4 d5 2.c4)",
-        "King's Indian Defense (after 1.d4 Nf6 2.c4 g6 3.Nc3 Bg7)",
-        "Custom FEN"
-    ])
-
+    # --- Preset selector ---
     preset_fens = {
-        "Starting position": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "Sicilian Defense (after 1.e4 c5)": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
-        "Ruy Lopez (after 1.e4 e5 2.Nf3 Nc6 3.Bb5)": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
-        "Queen's Gambit (after 1.d4 d5 2.c4)": "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
-        "King's Indian Defense (after 1.d4 Nf6 2.c4 g6 3.Nc3 Bg7)": "rnbqk2r/ppppppbp/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4",
-        "Custom FEN": ""
+        "Starting position":
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "Sicilian Defense (after 1.e4 c5)":
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+        "Ruy Lopez (after 1.e4 e5 2.Nf3 Nc6 3.Bb5)":
+            "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+        "Queen's Gambit (after 1.d4 d5 2.c4)":
+            "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
+        "King's Indian Defense (after 1.d4 Nf6 2.c4 g6 3.Nc3 Bg7)":
+            "rnbqk2r/ppppppbp/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4",
     }
 
-    if preset == "Custom FEN":
-        fen_input = st.text_input(
-            "Enter custom FEN",
-            placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-        )
-    else:
-        fen_input = preset_fens[preset]
-        st.text_input("Current FEN", value=fen_input, disabled=True)
+    preset = st.selectbox("Load a preset position", list(preset_fens.keys()))
+    init_fen = preset_fens[preset]
+    # Extract just the position part for chessboard.js (first token)
+    init_pos = init_fen.split()[0]
 
-    # --- Side to move override ---
-    st.subheader("Side to Move")
-    col1, col2 = st.columns(2)
-    with col1:
-        side = st.radio("Currently moving", ["White", "Black"])
+    # --- Interactive board HTML (chessboard.js + chess.js) ---
+    board_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: 'Segoe UI', sans-serif;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    gap: 10px;
+  }}
+  #board {{ width: 400px; }}
+  .controls {{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }}
+  button {{
+    padding: 7px 18px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }}
+  button:hover {{ filter: brightness(1.1); }}
+  .btn-secondary {{ background: #374151; color: #f3f4f6; }}
+  .btn-primary   {{ background: #2563eb; color: #ffffff; }}
+  .side-row {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #374151;
+  }}
+  .side-btn {{
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1.5px solid #9ca3af;
+    background: #f9fafb;
+    color: #374151;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+  }}
+  .side-btn.active {{
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #fff;
+  }}
+  #fen-box {{
+    width: 100%;
+    max-width: 440px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 11.5px;
+    color: #1e3a5f;
+    word-break: break-all;
+    text-align: center;
+    user-select: all;
+  }}
+  #copy-msg {{
+    font-size: 12px;
+    color: #16a34a;
+    min-height: 16px;
+  }}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+</head>
+<body>
 
-    # Modify FEN side to move if needed
-    def set_side_to_move(fen, side):
-        parts = fen.strip().split()
-        if len(parts) >= 2:
-            parts[1] = 'w' if side == "White" else 'b'
-        return ' '.join(parts)
+<div id="board"></div>
 
-    # --- Validate and display board ---
-    if fen_input:
+<div class="side-row">
+  Side to move:
+  <button class="side-btn active" id="btn-w" onclick="setSide('w')">White</button>
+  <button class="side-btn"        id="btn-b" onclick="setSide('b')">Black</button>
+</div>
+
+<div id="fen-box">Loading...</div>
+
+<div class="controls">
+  <button class="btn-secondary" onclick="resetBoard()">Reset</button>
+  <button class="btn-secondary" onclick="board.flip()">Flip</button>
+  <button class="btn-secondary" onclick="clearBoard()">Clear</button>
+  <button class="btn-primary"   onclick="copyFen()">Copy FEN</button>
+</div>
+<div id="copy-msg"></div>
+
+<script>
+  var side = 'w';
+
+  function getFen() {{
+    return board.fen() + ' ' + side + ' KQkq - 0 1';
+  }}
+
+  function updateFenBox() {{
+    document.getElementById('fen-box').textContent = getFen();
+  }}
+
+  function setSide(s) {{
+    side = s;
+    document.getElementById('btn-w').classList.toggle('active', s === 'w');
+    document.getElementById('btn-b').classList.toggle('active', s === 'b');
+    updateFenBox();
+  }}
+
+  function resetBoard() {{
+    board.position('{init_pos}', false);
+    setSide('{init_fen.split()[1]}');
+  }}
+
+  function clearBoard() {{
+    board.position('8/8/8/8/8/8/8/8', false);
+    updateFenBox();
+  }}
+
+  function copyFen() {{
+    var fen = getFen();
+    navigator.clipboard.writeText(fen).then(function() {{
+      var el = document.getElementById('copy-msg');
+      el.textContent = 'Copied! Paste it in the field below.';
+      setTimeout(function() {{ el.textContent = ''; }}, 2500);
+    }});
+  }}
+
+  var board = Chessboard('board', {{
+    draggable: true,
+    position: '{init_pos}',
+    onSnapEnd: updateFenBox,
+    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{{piece}}.png'
+  }});
+
+  updateFenBox();
+</script>
+</body>
+</html>
+"""
+
+    st.components.v1.html(board_html, height=580, scrolling=False)
+
+    # --- FEN input + evaluation ---
+    st.write("---")
+    st.subheader("Evaluate the Position")
+
+    fen_input = st.text_input(
+        "Paste FEN from board above",
+        placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        key="fen_eval_input"
+    )
+
+    if fen_input.strip():
         try:
-            fen_to_use = set_side_to_move(fen_input, side)
-            board = chess.Board(fen_to_use)
+            board_obj = chess.Board(fen_input.strip())
+            features  = extract_features(fen_input.strip())
 
-            # Display board using SVG
-            svg = chess.svg.board(board, size=400)
-            st.write("**Current Position:**")
-            st.components.v1.html(svg, height=420)
+            # Preview + stats side by side
+            col_board, col_stats = st.columns([1, 1])
+            with col_board:
+                st.write("**Position Preview**")
+                svg = chess.svg.board(board_obj, size=280)
+                st.components.v1.html(svg, height=295)
 
-            # Show position info
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.metric("Legal Moves", board.legal_moves.count())
-            with col_b:
-                in_check = "Yes" if board.is_check() else "No"
-                st.metric("In Check", in_check)
-            with col_c:
-                st.metric("Move Number", board.fullmove_number)
-
-            # --- Evaluation ---
-            st.subheader("Evaluation")
-            eval_col1, eval_col2 = st.columns(2)
-
-            with eval_col1:
-                if st.button("Evaluate with Ensemble (ML)"):
-                    features = extract_features(fen_to_use)
-                    pred_ml = ensemble.predict(features)[0]
-                    st.success(f"Ensemble Score: {pred_ml:.2f}")
-                    if pred_ml > 0.5:
-                        st.write("White has a clear advantage.")
-                    elif pred_ml > 0:
-                        st.write("White has a slight advantage.")
-                    elif pred_ml < -0.5:
-                        st.write("Black has a clear advantage.")
-                    elif pred_ml < 0:
-                        st.write("Black has a slight advantage.")
-                    else:
-                        st.write("The position is roughly equal.")
-
-            with eval_col2:
-                if st.button("Evaluate with Neural Network"):
-                    features = extract_features(fen_to_use)
-                    pred_nn = nn_model.predict(features)[0]
-                    st.success(f"Neural Network Score: {pred_nn:.2f}")
-                    if pred_nn > 0.5:
-                        st.write("White has a clear advantage.")
-                    elif pred_nn > 0:
-                        st.write("White has a slight advantage.")
-                    elif pred_nn < -0.5:
-                        st.write("Black has a clear advantage.")
-                    elif pred_nn < 0:
-                        st.write("Black has a slight advantage.")
-                    else:
-                        st.write("The position is roughly equal.")
-
-            # --- Compare both models ---
-            if st.button("Compare Both Models"):
-                features = extract_features(fen_to_use)
-                pred_ml = ensemble.predict(features)[0]
-                pred_nn = nn_model.predict(features)[0]
-
-                st.write("**Model Comparison:**")
-                cmp_col1, cmp_col2 = st.columns(2)
-                with cmp_col1:
-                    st.metric("Ensemble (ML)", f"{pred_ml:.2f}")
-                with cmp_col2:
-                    st.metric("Neural Network", f"{pred_nn:.2f}")
-
-                diff = abs(pred_ml - pred_nn)
-                st.write(f"Difference between models: **{diff:.2f}**")
-
-                if diff < 0.3:
-                    st.info("Both models agree on the evaluation.")
-                else:
-                    st.warning("The models disagree on this position. This may indicate an unusual or complex position.")
-
-            # --- Feature Breakdown ---
-            with st.expander("Show Feature Breakdown"):
-                features = extract_features(fen_to_use)
+            with col_stats:
+                st.write("**Position Info**")
+                st.metric("Legal Moves",  board_obj.legal_moves.count())
+                st.metric("In Check",     "Yes" if board_obj.is_check() else "No")
+                st.metric("Full Move",    board_obj.fullmove_number)
                 f = features[0]
-                st.write(f"**Material Balance:** {f[0]} (positive = White advantage)")
-                st.write(f"**Mobility:** {f[1]} legal moves for the current player")
-                st.write(f"**Center Control:** {f[2]} (positive = White controls more center squares)")
-                st.write(f"**King Safety:** {f[3]} (negative = White king is under more pressure)")
+                st.write(f"Material Balance: **{f[0]:+.0f}**")
+                st.write(f"Mobility: **{f[1]}** moves")
+                st.write(f"Center Control: **{f[2]:+.0f}**")
+                st.write(f"King Safety: **{f[3]:+.0f}**")
+
+            # Evaluate buttons
+            st.write("---")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                run_ml  = st.button("Ensemble (ML)",     use_container_width=True)
+            with c2:
+                run_nn  = st.button("Neural Network",    use_container_width=True)
+            with c3:
+                run_both = st.button("Compare Both",     use_container_width=True)
+
+            def advantage_label(s):
+                if   s >  1.0: return "White has a clear advantage"
+                elif s >  0.2: return "White has a slight advantage"
+                elif s < -1.0: return "Black has a clear advantage"
+                elif s < -0.2: return "Black has a slight advantage"
+                else:          return "Position is roughly equal"
+
+            if run_ml or run_both:
+                st.session_state["ml_result"] = ensemble.predict(features)[0]
+            if run_nn or run_both:
+                st.session_state["nn_result"] = nn_model.predict(features)[0]
+
+            if "ml_result" in st.session_state or "nn_result" in st.session_state:
+                st.write("### Evaluation Results")
+                r1, r2 = st.columns(2)
+                if "ml_result" in st.session_state:
+                    s = st.session_state["ml_result"]
+                    with r1:
+                        st.metric("Ensemble (ML)", f"{s:+.2f} pawns")
+                        st.caption(advantage_label(s))
+                if "nn_result" in st.session_state:
+                    s = st.session_state["nn_result"]
+                    with r2:
+                        st.metric("Neural Network", f"{s:+.2f} pawns")
+                        st.caption(advantage_label(s))
+
+                if "ml_result" in st.session_state and "nn_result" in st.session_state:
+                    diff = abs(st.session_state["ml_result"] - st.session_state["nn_result"])
+                    if diff < 0.3:
+                        st.success(f"Both models agree on the evaluation (difference: {diff:.2f})")
+                    else:
+                        st.warning(f"Models give different evaluations (difference: {diff:.2f}). This position may be complex or unusual.")
 
         except Exception as e:
-            st.error(f"Invalid FEN string: {e}")
-    else:
-        st.info("Select a preset or enter a FEN string to get started.")
+            st.error(f"Invalid FEN: {e}")
